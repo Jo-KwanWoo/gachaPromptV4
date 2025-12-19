@@ -1,0 +1,157 @@
+[역할]
+당신은 시니어 백엔드 소프트웨어 엔지니어이다.
+
+[목표]
+무인 판매기에서 사용되는 “장치 등록 시스템(Device Registration System)”의
+백엔드 API를 구현하라.
+
+구현 과정에서 합리적인 가정이 필요한 경우,
+간단한 주석 또는 짧은 README 섹션을 통해 명시하라.
+
+[기술 제약]
+- 언어: TypeScript
+- 런타임: Node.js
+- 백엔드 프레임워크: NestJS
+- 기본 데이터 저장소: In-memory 구현
+- 외부 서비스(DB, 큐 등)는 인터페이스로 추상화해야 한다.
+
+[공통 응답 형식]
+모든 API 응답은 다음 구조를 반드시 따른다.
+
+성공 응답:
+{
+  "success": true,
+  "data": ...,
+  "traceId": "string"
+}
+
+오류 응답:
+{
+  "success": false,
+  "error": {
+    "code": "STRING_CODE",
+    "message": "사람이 이해할 수 있는 오류 메시지"
+  },
+  "traceId": "string"
+}
+
+각 요청마다 고유한 traceId를 생성하여
+응답과 로그에 포함해야 한다.
+
+[인증 및 인가]
+- 관리자(Admin) API는 JWT 기반 인증을 요구한다.
+- role 값이 "ADMIN"인 사용자만 관리자 API에 접근 가능하다.
+- 인증 실패 시 HTTP 401
+- 권한 부족 시 HTTP 403
+
+[장치 데이터 모델]
+각 장치는 최소한 다음 필드를 포함해야 한다.
+- deviceId: string
+- hardwareId: string
+- status: UNREGISTERED | PENDING | REGISTERED | DECOMMISSIONED
+- createdAt: timestamp
+- updatedAt: timestamp
+- approvedAt (선택)
+- rejectedAt (선택)
+- rejectReason (선택)
+
+[API 명세]
+기본 경로: /api
+
+1) 장치 등록 요청
+POST /api/devices/registration-requests
+요청 본문:
+{
+  "hardwareId": "string",
+  "model": "string",
+  "firmwareVersion": "string"
+}
+규칙:
+- hardwareId는 필수이며 고유해야 한다.
+- 동일 hardwareId가 이미 REGISTERED 상태인 경우 409 Conflict.
+- 동일 hardwareId에 대해 PENDING 요청이 이미 존재하는 경우,
+  처리 방식을 선택하되 일관성을 유지하고 주석으로 설명한다.
+- 성공 시 PENDING 상태의 장치를 생성한다.
+응답:
+- 신규 등록 시 201 Created
+- 중복 등록 시 409 Conflict
+
+2) 장치 목록 조회 (관리자)
+GET /api/devices
+- 선택적 쿼리 파라미터: status
+- ADMIN 인증 필요
+
+3) 등록 대기 장치 목록 조회 (관리자)
+GET /api/devices/pending
+- ADMIN 인증 필요
+
+4) 장치 승인 (관리자)
+POST /api/devices/{deviceId}/approve
+규칙:
+- PENDING 상태의 장치만 승인 가능
+- 승인 시 REGISTERED 상태로 전환
+- DEVICE_APPROVED 이벤트 발생
+
+5) 장치 거부 (관리자)
+POST /api/devices/{deviceId}/reject
+요청 본문:
+{ "reason": "string" }
+규칙:
+- PENDING 상태의 장치만 거부 가능
+- 거부된 장치는 UNREGISTERED로 되돌리거나 소프트 삭제 중 하나를 선택하되 일관 유지
+- DEVICE_REJECTED 이벤트 발생
+
+6) 장치 해제 (관리자)
+DELETE /api/devices/{deviceId}
+규칙:
+- REGISTERED 상태의 장치만 해제 가능
+- DECOMMISSIONED 상태로 전환
+- DEVICE_DECOMMISSIONED 이벤트 발생
+
+[이벤트 처리]
+- 다음과 같은 내부 도메인 이벤트를 정의한다.
+  - DEVICE_REGISTERED
+  - DEVICE_APPROVED
+  - DEVICE_REJECTED
+  - DEVICE_DECOMMISSIONED
+- EventPublisher 인터페이스를 정의한다.
+- 기본 구현은 콘솔 로그 또는 In-memory 처리로 충분하다.
+
+[프로젝트/폴더 구조 요구사항(필수, 준수 여부를 최우선)]
+- 코드는 반드시 “폴더(프로젝트) 구조”로 분리하여 작성한다.
+- 단일 파일에 모든 코드를 작성하는 방식은 금지한다.
+- 아래 구조를 최소 기준으로 포함하라(파일명/세부 폴더는 합리적으로 조정 가능):
+
+/src
+  /devices
+    devices.controller.ts
+    devices.service.ts
+    dto/...
+    domain/...
+    repository/...
+    events/...
+  /auth
+    jwt-auth.guard.ts
+    roles.guard.ts
+    roles.decorator.ts
+  /common
+    filters/...
+    errors/...
+    response/...
+    logging/...
+    trace/...
+  app.module.ts
+  main.ts
+
+[테스트(권장)]
+- 승인 정상 흐름 1건 또는
+- 오류 케이스(예: 중복 등록) 1건 이상
+
+[출력 요구사항]
+다음을 한 번의 응답으로 제공하라:
+1) 프로젝트 폴더 트리(간단)
+2) 핵심 소스 코드(폴더/파일 단위로 구분하여 제시)
+3) 실행 및 테스트 방법
+
+불필요한 설명은 피하고,
+정확성, 일관성, 완성도를 최우선으로 한다.
