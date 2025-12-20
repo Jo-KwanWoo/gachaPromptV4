@@ -1,0 +1,7 @@
+export enum DeviceStatus {
+    UNREGISTERED = 'UNREGISTERED',
+    PENDING = 'PENDING',
+    REGISTERED = 'REGISTERED',
+    DECOMMISSIONED = 'DECOMMISSIONED',
+  }
+  
